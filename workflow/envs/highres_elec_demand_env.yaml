@@ -1,0 +1,22 @@
+name: highres_elec_demand
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python
+  - jupyter
+  - numpy
+  - pandas
+  - rioxarray
+  - snakemake-minimal
+  - numpy
+  - xarray=2024.3.0
+  - pandas
+  - matplotlib
+  - python-calamine
+  - workalendar
+  - statsmodels
+  - pip
+  - pip:
+    - cdsapi
+    - git+https://github.com/absolute-afloat/atlite.git@hr

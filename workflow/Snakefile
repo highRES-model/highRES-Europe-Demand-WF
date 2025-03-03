@@ -1,0 +1,185 @@
+import pathlib
+import numpy as np
+import sys
+import asyncio
+
+if sys.platform == 'win32':
+   asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+PYDEVD_DISABLE_FILE_VALIDATION=1
+
+abs_root_path = pathlib.Path().resolve()
+
+workpath=abs_root_path / "work/"
+
+demand_out_path= "final_demand//"
+
+time_zone_file=abs_root_path / "resources\\timezones\\europe_countries_timezones.csv"
+
+countries= [
+    "AT",
+    "BE",
+    "BG",
+    "CH",
+    "CZ",
+    "DE",
+    "DK",
+    "EE",
+    "ES",
+    "FI",
+    "FR",
+    "GB",
+    "GR",
+    "HR",
+    "HU",
+    "IE",
+    "IT",
+    "LT",
+    "LU",
+    "LV",
+    "NL",
+    "NO",
+    "PL",
+    "PT",
+    "RO",
+    "SE",
+    "SI",
+    "SK",
+  ]
+
+degree_day_years=np.arange(2000,2024)
+
+years=[2012]
+
+#years=np.arange(2000,2024)
+
+
+localrules:
+    all,
+    degdays_pop_weighted,
+    degdays_stats,
+    sub_existing_heat_cool,
+    calc_heat_cool_demand_ts,
+    calc_ev_demand_ts,
+    build_final_demand_ts
+
+
+rule all:
+    input:
+        expand(workpath / (demand_out_path + "demand_{year}.csv"), year=years)
+        
+ 
+rule degdays_pop_weighted:
+    input:
+        time_zones=time_zone_file,
+        weather_data_path="D:\\science\\models\\highRES\\data\\weather\\atlite\\packed\\",
+        pop_raster=abs_root_path / "resources\\maps\\JRC_1K_POP_2018.tif",
+        onshore_shape=abs_root_path / "resources\\maps\\europe_onshore.geojson",
+    output:
+        #workpath / ("hdd_annual_totals\\annual_hdd_"+str(degree_day_years[0])+"-"+str(degree_day_years[-1])+".csv"),
+        workpath / "degree_days\\country_degree_days_{degree_day_year}_atlite.csv",
+        #touch(workpath / "degree_days\\degree_days.finished"),
+    notebook:
+        "notebooks/degree_days_pop_weighted.ipynb"
+        
+rule degdays_stats:
+    input:
+        [workpath / "degree_days\\country_degree_days_{degree_day_year}_atlite.csv".format(degree_day_year=degree_day_year) for degree_day_year in degree_day_years],
+    output:
+        workpath / ("hdd_annual_totals\\annual_hdd_"+str(degree_day_years[0])+"-"+str(degree_day_years[-1])+".csv"),
+    params:
+        countries=countries,
+        degree_day_years=[dy for dy in degree_day_years],
+    notebook:
+        "notebooks/calc_degdays_stats.ipynb"
+        
+rule sub_existing_heat_cool:
+    input:
+        time_zones=time_zone_file,
+        base_dem=abs_root_path / "resources\\base_demands\\countries_2012.csv",
+        degree_days=workpath / "degree_days\\country_degree_days_2012_atlite.csv",
+    output:
+        workpath / "based_demands_net_heat_cool\\base_demand_net_heat_cool_2012.csv",
+        fit_stats= workpath / "fit_stats\\fit_stats_2012.csv",
+    params:
+        countries=countries,
+    notebook:
+        "notebooks/subtract_existing_heat_cool.ipynb"
+        
+rule calc_heat_cool_demand_ts:
+    input:
+        hdd_annual_totals=workpath / ("hdd_annual_totals\\annual_hdd_"+str(degree_day_years[0])+"-"+str(degree_day_years[-1])+".csv"),
+        ued_annual= abs_root_path / "resources\\ued_heat_annual\\europe_useful_space_h&c_demand_2012.csv",
+        cooling_annual=rules.sub_existing_heat_cool.output.fit_stats,
+        heat_db = abs_root_path / "resources\\heat_scenarios\\h&c_and_tra_dem_scen.xlsx",
+        heatpump_profiles = abs_root_path / "resources\\activity_profiles\\heat_and_cool_profiles.csv",
+        time_zones=time_zone_file,
+        degree_days=workpath / "degree_days\\country_degree_days_{year}_atlite.csv",
+    output:
+        workpath / (demand_out_path + "heating_time_series_{year}.csv"),
+    params:
+        countries=countries,
+    notebook:
+        "notebooks/calc_heat_cool_demand_ts.ipynb"
+        
+rule calc_ev_demand_ts:
+    input:
+        ev_profiles=abs_root_path / "resources\\activity_profiles\\ev_daily_profile.xlsx",
+        time_zones=time_zone_file,
+        ev_annual_dem=abs_root_path / "resources\\ev_dem_annual\\country_car_ev_twh.csv",
+    output:
+        workpath / (demand_out_path + "ev_time_series_{year}.csv"),
+    params:
+        countries=countries,
+    notebook:
+        "notebooks/calc_ev_demand_ts.ipynb"
+        
+rule build_final_demand_ts:
+    input:
+        rules.calc_heat_cool_demand_ts.output[0],
+        rules.calc_ev_demand_ts.output[0],
+        rules.sub_existing_heat_cool.output[0],
+    output:
+        workpath / (demand_out_path + "demand_{year}.csv"),
+    params:
+        countries=countries,
+    notebook:
+        "notebooks/build_final_demand_ts.ipynb"
+        
+    
+        
+        
+        
+        
+        
+        
+
+# rule build_technoeconomic_inputs:
+    # input:
+        # "resources/zones.csv",
+        # "resources/highres_scenarios.xls",
+        # "resources/highres_techecon_database.ods",
+        # europecountriescsvlocation="resources/europe_countries.csv",
+        # europedemandcsvlocation="resources/europe_demand_2006-2015.csv",
+        # data2dd="workflow/scripts/data2dd_funcs.py",
+    # conda:
+        # "envs/build_technoeconomic.yml"
+    # output:
+        # modelpath / "{year}_temporal.dd",
+        # modelpath / "BASE_co2_budget.dd",
+        # modelpath / "BASE_gen.dd",
+        # modelpath / "BASE_store.dd",
+        # modelpath / "trans.dd",
+        # demandfile=(
+            # modelpath / "BASE_norescale_demand_{year}.dd"
+            # if user_mode == "developer"
+            # else temp(modelpath / "BASE_norescale_demand_{year}.dd")
+        # ),
+    # params:
+        # aggregated_regions=aggregated_regions,
+        # date_range=date_range,
+        # user_mode=user_mode,
+    # script:
+        # "scripts/gb_ext_data2dd.py"
+
+
