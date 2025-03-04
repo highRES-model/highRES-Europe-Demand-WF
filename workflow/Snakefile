@@ -3,16 +3,13 @@ import numpy as np
 import sys
 import asyncio
 
-if sys.platform == 'win32':
-   asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-PYDEVD_DISABLE_FILE_VALIDATION=1
-
 abs_root_path = pathlib.Path().resolve()
 
 workpath=abs_root_path / "work/"
+demand_out_path= "final_demand/"
 
-demand_out_path= "final_demand//"
+# choose EV activity profiles, either DESSTINEE or EINA 2050 EV
+ev_act_profile="DESSTINEE"
 
 time_zone_file=abs_root_path / "resources\\timezones\\europe_countries_timezones.csv"
 
@@ -131,6 +128,7 @@ rule calc_ev_demand_ts:
         workpath / (demand_out_path + "ev_time_series_{year}.csv"),
     params:
         countries=countries,
+        act_profile=ev_act_profile,
     notebook:
         "notebooks/calc_ev_demand_ts.ipynb"
         
@@ -149,37 +147,3 @@ rule build_final_demand_ts:
     
         
         
-        
-        
-        
-        
-
-# rule build_technoeconomic_inputs:
-    # input:
-        # "resources/zones.csv",
-        # "resources/highres_scenarios.xls",
-        # "resources/highres_techecon_database.ods",
-        # europecountriescsvlocation="resources/europe_countries.csv",
-        # europedemandcsvlocation="resources/europe_demand_2006-2015.csv",
-        # data2dd="workflow/scripts/data2dd_funcs.py",
-    # conda:
-        # "envs/build_technoeconomic.yml"
-    # output:
-        # modelpath / "{year}_temporal.dd",
-        # modelpath / "BASE_co2_budget.dd",
-        # modelpath / "BASE_gen.dd",
-        # modelpath / "BASE_store.dd",
-        # modelpath / "trans.dd",
-        # demandfile=(
-            # modelpath / "BASE_norescale_demand_{year}.dd"
-            # if user_mode == "developer"
-            # else temp(modelpath / "BASE_norescale_demand_{year}.dd")
-        # ),
-    # params:
-        # aggregated_regions=aggregated_regions,
-        # date_range=date_range,
-        # user_mode=user_mode,
-    # script:
-        # "scripts/gb_ext_data2dd.py"
-
-
